@@ -1,9 +1,9 @@
-const http = require('http');
-const fs = require('fs');
+const express = require('express');
 const path = require('path');
-const url = require('url');
 const https = require('https');
 require('dotenv').config();
+
+const app = express();
 
 // API URLs
 const CHAT_API_URL = 'https://api.minimaxi.chat/v1/text/chatcompletion_v2';
@@ -12,8 +12,6 @@ const VIDEO_GEN_API_URL = 'https://api.minimaxi.chat/v1/video_generation';
 const VIDEO_QUERY_API_URL = 'https://api.minimaxi.chat/v1/query/video_generation';
 const FILE_RETRIEVE_API_URL = 'https://api.minimaxi.chat/v1/files/retrieve';
 
-// Server configuration
-const PORT = process.env.PORT || 3000;
 const MAX_AUDIO_SIZE = process.env.MAX_AUDIO_SIZE || 20971520; // 20MB
 const MIN_AUDIO_DURATION = process.env.MIN_AUDIO_DURATION || 10;
 const MAX_AUDIO_DURATION = process.env.MAX_AUDIO_DURATION || 300;
@@ -28,17 +26,29 @@ async function makeRequest(url, options, data) {
                 try {
                     const parsedData = JSON.parse(responseData);
                     if (res.statusCode >= 200 && res.statusCode < 300) {
-                        resolve(parsedData);
+                        // Check for MiniMax API specific response format
+                        if (parsedData.base_resp && parsedData.base_resp.status_code === 0) {
+                            resolve(parsedData.reply || parsedData.text || parsedData);
+                        } else if (parsedData.base_resp) {
+                            reject(new Error(parsedData.base_resp.status_msg || 'API request failed'));
+                        } else {
+                            resolve(parsedData);
+                        }
                     } else {
-                        reject(new Error(parsedData.message || 'API request failed'));
+                        reject(new Error(parsedData.message || parsedData.base_resp?.status_msg || 'API request failed'));
                     }
                 } catch (error) {
-                    reject(error);
+                    console.error('Response parsing error:', error, 'Raw response:', responseData);
+                    reject(new Error('Failed to parse API response'));
                 }
             });
         });
 
-        req.on('error', reject);
+        req.on('error', (error) => {
+            console.error('Request error:', error);
+            reject(error);
+        });
+
         if (data) {
             req.write(JSON.stringify(data));
         }
@@ -87,188 +97,202 @@ async function parseBody(req) {
     });
 }
 
-const server = http.createServer(async (req, res) => {
-    // Add CORS headers to all responses
-    Object.entries(CORS_HEADERS).forEach(([key, value]) => {
-        res.setHeader(key, value);
-    });
+// Middleware
+app.use(express.json());
+app.use(express.static(path.join(__dirname)));
 
-    // Handle OPTIONS requests for CORS
+// Add CORS headers
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     if (req.method === 'OPTIONS') {
-        res.writeHead(204);
-        res.end();
-        return;
+        return res.sendStatus(204);
     }
+    next();
+});
 
-    const parsedUrl = url.parse(req.url);
-    
-    // API endpoints
-    if (parsedUrl.pathname.startsWith('/api/')) {
-        res.setHeader('Content-Type', 'application/json');
-        
-        try {
-            switch (parsedUrl.pathname) {
-                case '/api/chat':
-                    if (req.method === 'POST') {
-                        const body = await parseBody(req);
-                        const response = await makeRequest(
-                            `${CHAT_API_URL}?GroupId=${process.env.MINIMAX_GROUP_ID}`,
-                            {
-                                method: 'POST',
-                                headers: {
-                                    'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}`,
-                                    'Content-Type': 'application/json'
-                                }
-                            },
-                            {
-                                model: 'MiniMax-Text-01',
-                                messages: body.messages,
-                                temperature: 0.1,
-                                max_tokens: 1000,
-                                mask_sensitive_info: false
-                            }
-                        );
-                        res.writeHead(200);
-                        res.end(JSON.stringify(response));
-                    }
-                    break;
-                    
-                case '/api/t2a':
-                    if (req.method === 'POST') {
-                        const body = await parseBody(req);
-                        const response = await makeRequest(
-                            `${T2A_API_URL}?GroupId=${process.env.MINIMAX_GROUP_ID}`,
-                            {
-                                method: 'POST',
-                                headers: {
-                                    'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}`,
-                                    'Content-Type': 'application/json'
-                                }
-                            },
-                            {
-                                model: 'speech-01-turbo',
-                                text: body.text,
-                                stream: body.stream || false,
-                                voice_setting: body.voice_setting,
-                                audio_setting: {
-                                    sample_rate: 32000,
-                                    bitrate: 128000,
-                                    format: 'mp3',
-                                    channel: 1
-                                },
-                                language_boost: body.language_boost
-                            }
-                        );
-                        res.writeHead(200);
-                        res.end(JSON.stringify(response));
-                    }
-                    break;
-
-                case '/api/video/generate':
-                    if (req.method === 'POST') {
-                        const body = await parseBody(req);
-                        const response = await makeRequest(
-                            VIDEO_GEN_API_URL,
-                            {
-                                method: 'POST',
-                                headers: {
-                                    'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}`,
-                                    'Content-Type': 'application/json'
-                                }
-                            },
-                            {
-                                model: body.model || 'video-01',
-                                prompt: body.prompt,
-                                prompt_optimizer: body.prompt_optimizer !== false,
-                                first_frame_image: body.first_frame_image,
-                                subject_reference: body.subject_reference
-                            }
-                        );
-                        res.writeHead(200);
-                        res.end(JSON.stringify(response));
-                    }
-                    break;
-
-                case '/api/video/status':
-                    if (req.method === 'GET') {
-                        const taskId = url.parse(req.url, true).query.task_id;
-                        if (!taskId) {
-                            res.writeHead(400);
-                            res.end(JSON.stringify({ error: 'Missing task_id parameter' }));
-                            return;
-                        }
-
-                        const response = await makeRequest(
-                            `${VIDEO_QUERY_API_URL}?task_id=${taskId}`,
-                            {
-                                method: 'GET',
-                                headers: {
-                                    'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}`,
-                                    'Content-Type': 'application/json'
-                                }
-                            }
-                        );
-                        res.writeHead(200);
-                        res.end(JSON.stringify(response));
-                    }
-                    break;
-
-                case '/api/video/download':
-                    if (req.method === 'GET') {
-                        const fileId = url.parse(req.url, true).query.file_id;
-                        if (!fileId) {
-                            res.writeHead(400);
-                            res.end(JSON.stringify({ error: 'Missing file_id parameter' }));
-                            return;
-                        }
-
-                        const response = await makeRequest(
-                            `${FILE_RETRIEVE_API_URL}?GroupId=${process.env.MINIMAX_GROUP_ID}&file_id=${fileId}`,
-                            {
-                                method: 'GET',
-                                headers: {
-                                    'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}`,
-                                    'Content-Type': 'application/json'
-                                }
-                            }
-                        );
-                        res.writeHead(200);
-                        res.end(JSON.stringify(response));
-                    }
-                    break;
-                    
-                default:
-                    res.writeHead(404);
-                    res.end(JSON.stringify({ error: 'Not found' }));
-            }
-        } catch (error) {
-            res.writeHead(500);
-            res.end(JSON.stringify({ error: error.message }));
-        }
-        return;
-    }
-
-    // Serve static files
-    let filePath = path.join(__dirname, req.url === '/' ? 'index.html' : req.url);
-    const extname = path.extname(filePath);
-    const contentType = MIME_TYPES[extname] || 'application/octet-stream';
-
+// Chat endpoint
+app.post('/api/chat', async (req, res) => {
     try {
-        const content = await fs.promises.readFile(filePath);
-        res.writeHead(200, { 'Content-Type': contentType });
-        res.end(content, 'utf-8');
+        const response = await makeRequest(
+            `${CHAT_API_URL}?GroupId=${process.env.MINIMAX_GROUP_ID}`,
+            {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}`,
+                    'Content-Type': 'application/json'
+                }
+            },
+            {
+                model: 'MiniMax-Text-01',
+                messages: req.body.messages,
+                temperature: 0.1,
+                max_tokens: 1000,
+                mask_sensitive_info: false
+            }
+        );
+
+        // Format the response to match what the client expects
+        const formattedResponse = {
+            choices: [{
+                message: {
+                    content: response.reply || response.text || 'No response content'
+                }
+            }]
+        };
+
+        res.json(formattedResponse);
     } catch (error) {
-        if (error.code === 'ENOENT') {
-            res.writeHead(404);
-            res.end('File not found');
-        } else {
-            res.writeHead(500);
-            res.end('Server error: ' + error.code);
-        }
+        console.error('Chat API Error:', error);
+        res.status(500).json({ 
+            error: 'Failed to get response from chat API',
+            details: error.message 
+        });
     }
 });
 
-server.listen(PORT, () => {
+// Text to speech endpoint
+app.post('/api/t2a', async (req, res) => {
+    try {
+        const response = await makeRequest(
+            `${T2A_API_URL}?GroupId=${process.env.MINIMAX_GROUP_ID}`,
+            {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}`,
+                    'Content-Type': 'application/json'
+                }
+            },
+            {
+                model: 'speech-01-turbo',
+                text: req.body.text,
+                stream: req.body.stream || false,
+                voice_setting: req.body.voice_setting,
+                audio_setting: {
+                    sample_rate: 32000,
+                    bitrate: 128000,
+                    format: 'mp3',
+                    channel: 1
+                },
+                language_boost: req.body.language_boost
+            }
+        );
+        res.json(response);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Video generation endpoint
+app.post('/api/video/generate', async (req, res) => {
+    try {
+        const response = await makeRequest(
+            VIDEO_GEN_API_URL,
+            {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}`,
+                    'Content-Type': 'application/json'
+                }
+            },
+            {
+                model: req.body.model || 'video-01',
+                prompt: req.body.prompt,
+                prompt_optimizer: req.body.prompt_optimizer !== false,
+                first_frame_image: req.body.first_frame_image,
+                subject_reference: req.body.subject_reference
+            }
+        );
+        res.json(response);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Video status endpoint
+app.get('/api/video/status', async (req, res) => {
+    try {
+        const { task_id } = req.query;
+        if (!task_id) {
+            return res.status(400).json({ error: 'Missing task_id parameter' });
+        }
+
+        const response = await makeRequest(
+            `${VIDEO_QUERY_API_URL}?task_id=${task_id}`,
+            {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}`,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+        res.json(response);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Video download endpoint
+app.get('/api/video/download', async (req, res) => {
+    try {
+        const { file_id } = req.query;
+        if (!file_id) {
+            return res.status(400).json({ error: 'Missing file_id parameter' });
+        }
+
+        const response = await makeRequest(
+            `${FILE_RETRIEVE_API_URL}?GroupId=${process.env.MINIMAX_GROUP_ID}&file_id=${file_id}`,
+            {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}`,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+        res.json(response);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// API error handling middleware
+app.use('/api', (err, req, res, next) => {
+    console.error('API Error:', err.stack);
+    res.status(err.status || 500).json({
+        error: err.message || 'Internal Server Error'
+    });
+});
+
+// Serve static files
+app.use(express.static(path.join(__dirname), {
+    index: false // Disable automatic serving of index.html
+}));
+
+// Handle API 404s
+app.use('/api/*', (req, res) => {
+    res.status(404).json({ error: 'API endpoint not found' });
+});
+
+// Serve index.html for all other routes (SPA)
+app.use('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Global error handler
+app.use((err, req, res, next) => {
+    console.error('Global Error:', err.stack);
+    if (req.path.startsWith('/api/')) {
+        res.status(500).json({ error: 'Internal Server Error' });
+    } else {
+        res.status(500).send('Internal Server Error');
+    }
+});
+
+// Start server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}/`);
-    console.log(`Test page available at http://localhost:${PORT}/test.html`);
 });
