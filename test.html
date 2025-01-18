@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MiniMax Chat Test</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <h1>MiniMax Chat Test Page</h1>
+    
+    <div class="test-section">
+        <h2>1. API Connection Test</h2>
+        <button onclick="testAPI()">Test API Connection</button>
+        <div id="api-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. Audio Capability Test</h2>
+        <button onclick="testAudio()">Test Audio</button>
+        <div id="audio-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. Voice Clone Test</h2>
+        <input type="file" id="test-file" accept=".mp3,.m4a,.wav">
+        <button onclick="testVoiceClone()">Test Voice Clone</button>
+        <div id="clone-result"></div>
+    </div>
+
+    <script>
+        const API_KEY = 'YOUR_API_KEY'; // Replace with your API key
+        const GROUP_ID = 'YOUR_GROUP_ID'; // Replace with your group ID
+
+        async function testAPI() {
+            const result = document.getElementById('api-result');
+            try {
+                const response = await fetch(`https://api.minimaxi.chat/v1/text/chatcompletion_v2?GroupId=${GROUP_ID}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${API_KEY}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: 'MiniMax-Text-01',
+                        messages: [{ role: 'user', content: 'Hello' }],
+                        temperature: 0.1,
+                        max_tokens: 10
+                    })
+                });
+                
+                if (response.ok) {
+                    result.innerHTML = '<p class="success">✓ API connection successful</p>';
+                } else {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+            } catch (error) {
+                result.innerHTML = `<p class="error">✗ API connection failed: ${error.message}</p>`;
+            }
+        }
+
+        async function testAudio() {
+            const result = document.getElementById('audio-result');
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                oscillator.connect(audioContext.destination);
+                oscillator.start();
+                setTimeout(() => {
+                    oscillator.stop();
+                    result.innerHTML = '<p class="success">✓ Audio capabilities working</p>';
+                }, 500);
+            } catch (error) {
+                result.innerHTML = `<p class="error">✗ Audio test failed: ${error.message}</p>`;
+            }
+        }
+
+        async function testVoiceClone() {
+            const result = document.getElementById('clone-result');
+            const file = document.getElementById('test-file').files[0];
+            
+            if (!file) {
+                result.innerHTML = '<p class="error">✗ Please select a file first</p>';
+                return;
+            }
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('purpose', 'voice_clone');
+
+                const response = await fetch(`https://api.minimaxi.chat/v1/files/upload?GroupId=${GROUP_ID}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${API_KEY}`
+                    },
+                    body: formData
+                });
+
+                if (response.ok) {
+                    result.innerHTML = '<p class="success">✓ Voice clone test successful</p>';
+                } else {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+            } catch (error) {
+                result.innerHTML = `<p class="error">✗ Voice clone test failed: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>

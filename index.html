@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MiniMax AI Chat</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <h1>MiniMax AI Chat</h1>
+            <div class="voice-controls">
+                <select id="voice-select">
+                    <option value="Grinch">Grinch</option>
+                    <option value="male-qn-qingse">Male QN</option>
+                    <option value="female-shaanxi">Female Shaanxi</option>
+                    <option value="male-sichuan">Male Sichuan</option>
+                    <option value="female-zh-cn">Female Chinese</option>
+                    <option value="male-en-us">Male English</option>
+                    <option value="female-en-us">Female English</option>
+                </select>
+                <input type="range" id="speed-control" min="0.5" max="2.0" step="0.1" value="1.0" title="Speed" />
+                <input type="range" id="volume-control" min="0.1" max="2.0" step="0.1" value="1.0" title="Volume" />
+                <input type="range" id="pitch-control" min="-12" max="12" step="1" value="0" title="Pitch" />
+                <select id="language-boost">
+                    <option value="auto">Auto</option>
+                    <option value="en">English</option>
+                    <option value="zh">Chinese</option>
+                </select>
+                <input type="checkbox" id="stream-toggle" title="Stream Audio" />
+                <button id="toggle-voice" class="icon-button">🔊</button>
+            </div>
+        </header>
+
+        <main>
+            <div class="chat-container">
+                <div id="chat-messages" class="messages"></div>
+                <div class="input-area">
+                    <textarea 
+                        id="message-input" 
+                        placeholder="Type your message here..."
+                        rows="3"
+                    ></textarea>
+                    <div class="button-group">
+                        <button id="voice-record" class="icon-button">🎤</button>
+                        <button id="speak-button" class="icon-button">🔊</button>
+                        <button id="send-message">Send</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="side-panels">
+                <div class="voice-clone-panel panel">
+                    <h2>Voice Clone</h2>
+                    <div class="upload-section">
+                        <input type="file" id="voice-file" accept=".mp3,.wav,.m4a" />
+                        <p class="hint">Upload MP3, WAV, or M4A (10s - 5min, max 20MB)</p>
+                    </div>
+                    <div class="voice-settings">
+                        <label>
+                            Voice ID:
+                            <input type="text" id="voice-id" placeholder="e.g., MyVoice001" />
+                        </label>
+                        <label class="checkbox">
+                            <input type="checkbox" id="noise-reduction" />
+                            Noise Reduction
+                        </label>
+                        <button id="clone-voice">Clone Voice</button>
+                    </div>
+                    <div class="preview-section">
+                        <textarea 
+                            id="preview-text" 
+                            placeholder="Enter text to preview cloned voice..."
+                            rows="2"
+                        ></textarea>
+                        <button id="preview-voice">Preview</button>
+                    </div>
+                </div>
+
+                <div class="video-gen-panel panel">
+                    <h2>Video Generation</h2>
+                    <div class="video-input-section">
+                        <textarea 
+                            id="video-prompt" 
+                            placeholder="Describe the video you want to generate..."
+                            rows="3"
+                        ></textarea>
+                        <div class="video-settings">
+                            <select id="video-model">
+                                <option value="video-01">Standard Video</option>
+                                <option value="video-01-live2d">Live2D Style</option>
+                                <option value="S2V-01">Subject to Video</option>
+                            </select>
+                            <label class="checkbox">
+                                <input type="checkbox" id="prompt-optimizer" checked />
+                                Enable Prompt Optimizer
+                            </label>
+                        </div>
+                        <div class="image-upload">
+                            <label>First Frame Image (optional):
+                                <input type="file" id="first-frame" accept="image/*" />
+                            </label>
+                            <p class="hint">JPG/PNG, aspect ratio 2:5 to 5:2, min 300px, max 20MB</p>
+                        </div>
+                        <div class="subject-upload" style="display: none;">
+                            <label>Subject Reference:
+                                <input type="file" id="subject-ref" accept="image/*" />
+                            </label>
+                            <p class="hint">Required for Subject to Video model</p>
+                        </div>
+                        <button id="generate-video">Generate Video</button>
+                    </div>
+                    <div class="video-status" style="display: none;">
+                        <h3>Generation Status</h3>
+                        <p id="status-text">Initializing...</p>
+                        <div class="progress-bar">
+                            <div class="progress"></div>
+                        </div>
+                    </div>
+                    <div class="video-result" style="display: none;">
+                        <video id="result-video" controls>
+                            Your browser does not support the video tag.
+                        </video>
+                        <button id="download-video">Download Video</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="music-gen-panel panel">
+                <h2>Music Generation</h2>
+                <div class="music-upload-section">
+                    <h3>Upload Reference Music</h3>
+                    <div class="upload-section">
+                        <input type="file" id="music-file" accept=".mp3,.wav" />
+                        <p class="hint">Upload MP3 or WAV (10s - 10min)</p>
+                        <select id="upload-purpose">
+                            <option value="song">Full Song (Vocals + Instrumental)</option>
+                            <option value="voice">Vocals Only</option>
+                            <option value="instrumental">Instrumental Only</option>
+                        </select>
+                        <button id="upload-music">Upload</button>
+                    </div>
+                    <div class="reference-ids">
+                        <input type="text" id="voice-id-ref" placeholder="Voice ID" readonly />
+                        <input type="text" id="instrumental-id-ref" placeholder="Instrumental ID" readonly />
+                    </div>
+                </div>
+
+                <div class="music-generation-section">
+                    <h3>Generate Music</h3>
+                    <textarea 
+                        id="lyrics-input" 
+                        placeholder="Enter lyrics here... Use \n for line breaks and ## for accompaniment sections"
+                        rows="4"
+                    ></textarea>
+                    <div class="generation-settings">
+                        <label class="checkbox">
+                            <input type="checkbox" id="use-voice" checked />
+                            Use Voice Reference
+                        </label>
+                        <label class="checkbox">
+                            <input type="checkbox" id="use-instrumental" checked />
+                            Use Instrumental Reference
+                        </label>
+                    </div>
+                    <button id="generate-music">Generate Music</button>
+                </div>
+
+                <div class="music-result" style="display: none;">
+                    <h3>Generated Music</h3>
+                    <audio id="result-audio" controls>
+                        Your browser does not support the audio element.
+                    </audio>
+                    <button id="download-music">Download Music</button>
+                </div>
+            </div>
+        </main>
+
+        <div id="status-message" class="status-message"></div>
+    </div>
+
+    <script src="script.js"></script>
+
+    <section class="api-docs">
+        <h2>Music Generation API</h2>
+        <h3>Introduction</h3>
+        <p>The function of this API: it supports users to upload custom reference music and lyrics, and then generate AI music with the reference music (acapella + accompaniment) and lyrics.</p>
+        
+        <p>The specific operation process is as follows:</p>
+        <ol>
+            <li>Upload the music file or acapella + accompaniment file through the Upload API to obtain the voice_id (acapella) and instrumental_id (accompaniment) that will be used as references for generating the music;</li>
+            <li>Generate the corresponding AI music with the voice_id, instrumental_id, and lyrics.</li>
+        </ol>
+
+        <h3>Upload API</h3>
+        <p><strong>API:</strong> https://api.minimaxi.chat/v1/music_upload</p>
+        <p>Upload the audio file, split it into acapella and accompaniment, and generate corresponding voice_id and instrumental_id. They can be used as the reference acapella and accompaniment for the music generation API.</p>
+
+        <h4>Request Parameters</h4>
+        <ul>
+            <li><strong>Authorization</strong> (string, Required): API key</li>
+            <li><strong>file</strong> (Required): Audio file path, supports WAV and MP3 formats. The audio duration must be longer than 10s and no more than 10 minutes.</li>
+            <li><strong>purpose</strong> (string, Required): song/voice/instrumental
+                <ul>
+                    <li>If purpose is song:
+                        <ul>
+                            <li>You need to upload a music file containing both acapella (vocals) and accompaniment.</li>
+                            <li>The acapella must be in singing form; normal speech is not supported.</li>
+                            <li>Outputs: voice_id and instrumental_id.</li>
+                        </ul>
+                    </li>
+                    <li>If purpose is voice:
+                        <ul>
+                            <li>You need to upload a file containing only acapella in singing form (normal speech audio is not supported).</li>
+                            <li>Output: voice_id.</li>
+                        </ul>
+                    </li>
+                    <li>If purpose is instrumental:
+                        <ul>
+                            <li>You need to upload a file containing only accompaniment.</li>
+                            <li>Output: instrumental_id.</li>
+                        </ul>
+                    </li>
+                </ul>
+            </li>
+        </ul>
+
+        <h4>Response</h4>
+        <ul>
+            <li><strong>voice_id</strong>: The voice_id will only be returned when the purpose is song or voice.</li>
+            <li><strong>instrumental_id</strong>: The instrumental_id will only be returned when the purpose is song or instrumental.</li>
+            <li><strong>base_resp</strong>: Error codes, status messages, and corresponding details.</li>
+        </ul>
+
+        <h3>Music Generation API</h3>
+        <p><strong>API:</strong> https://api.minimaxi.chat/v1/music_generation</p>
+        <p>This API will use the voice_id and instrumental_id from the Upload API to generate AI music.</p>
+
+        <h4>Request Parameters</h4>
+        <ul>
+            <li><strong>Authorization</strong> (string, Required): API key.</li>
+            <li><strong>refer_voice</strong> (string): voice_id. At least one of refer_voice or refer_instrumental is required.</li>
+            <li><strong>refer_instrumental</strong> (string): instrumental_id. At least one of refer_voice or refer_instrumental is required.</li>
+            <li><strong>lyrics</strong> (string, Required): 
+                <ul>
+                    <li>Use a newline character (\n) to separate each line of lyrics.</li>
+                    <li>Use two consecutive newline characters (\n\n) to add a pause between lines.</li>
+                    <li>Use double hash marks (##) at the beginning and end of the lyrics to add accompaniment.</li>
+                </ul>
+            </li>
+            <li><strong>model</strong> (string, Required): music-01</li>
+            <li><strong>audio_setting</strong>: Optional settings for the output audio format.</li>
+        </ul>
+
+        <h4>Response</h4>
+        <ul>
+            <li><strong>data</strong>: Contains the generated audio data and status.</li>
+            <li><strong>base_resp</strong>: Error codes, status messages, and corresponding details.</li>
+        </ul>
+    </section>
+</body>
+</html>
