@@ -25,10 +25,17 @@ async function makeRequest(url, options, data) {
             res.on('end', () => {
                 try {
                     const parsedData = JSON.parse(responseData);
+                    console.log('API Response:', JSON.stringify(parsedData, null, 2));
+                    
                     if (res.statusCode >= 200 && res.statusCode < 300) {
                         // Check for MiniMax API specific response format
                         if (parsedData.base_resp && parsedData.base_resp.status_code === 0) {
-                            resolve(parsedData.reply || parsedData.text || parsedData);
+                            if (parsedData.choices && parsedData.choices.length > 0) {
+                                resolve(parsedData.choices[0].message.content);
+                            } else {
+                                console.error('No choices found in response:', parsedData);
+                                reject(new Error('No choices found in API response'));
+                            }
                         } else if (parsedData.base_resp) {
                             reject(new Error(parsedData.base_resp.status_msg || 'API request failed'));
                         } else {
@@ -115,34 +122,41 @@ app.use((req, res, next) => {
 // Chat endpoint
 app.post('/api/chat', async (req, res) => {
     try {
-        const response = await makeRequest(
-            `${CHAT_API_URL}?GroupId=${process.env.MINIMAX_GROUP_ID}`,
-            {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}`,
-                    'Content-Type': 'application/json'
+            console.log('Chat request body:', JSON.stringify(req.body, null, 2));
+            
+            const response = await makeRequest(
+                `${CHAT_API_URL}?GroupId=${process.env.MINIMAX_GROUP_ID}`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}`,
+                        'Content-Type': 'application/json'
+                    }
+                },
+                {
+                    model: 'MiniMax-Text-01',
+                    messages: req.body.messages,
+                    temperature: 0.1,
+                    max_tokens: 1000,
+                    top_p: 0.95,
+                    mask_sensitive_info: false
                 }
-            },
-            {
-                model: 'MiniMax-Text-01',
-                messages: req.body.messages,
-                temperature: 0.1,
-                max_tokens: 1000,
-                mask_sensitive_info: false
-            }
-        );
+            );
 
-        // Format the response to match what the client expects
-        const formattedResponse = {
-            choices: [{
-                message: {
-                    content: response.reply || response.text || 'No response content'
-                }
-            }]
-        };
+            console.log('Processed API response:', response);
 
-        res.json(formattedResponse);
+            // Format the response to match what the client expects
+            const formattedResponse = {
+                choices: [{
+                    message: {
+                        content: response,
+                        role: 'assistant'
+                    }
+                }]
+            };
+
+            console.log('Sending formatted response:', JSON.stringify(formattedResponse, null, 2));
+            res.json(formattedResponse);
     } catch (error) {
         console.error('Chat API Error:', error);
         res.status(500).json({ 
