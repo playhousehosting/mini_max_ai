@@ -16,6 +16,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const VOICE_CLONE_URL = '/api/voice/clone';
     const MUSIC_UPLOAD_URL = '/api/music/upload';
     const MUSIC_GENERATION_URL = '/api/music/generate';
+    const VIDEO_GEN_URL = '/api/video/generate';
+    const VIDEO_STATUS_URL = '/api/video/status';
+    const VIDEO_DOWNLOAD_URL = '/api/video/download';
 
     let lastAiMessage = '';
     let conversationHistory = [];
@@ -44,10 +47,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const previewText = document.getElementById('preview-text');
     const cloneButton = document.getElementById('clone-voice');
 
+    // Get video generation elements
+    const videoPrompt = document.getElementById('video-prompt');
+    const videoModel = document.getElementById('video-model');
+    const promptOptimizer = document.getElementById('prompt-optimizer');
+    const firstFrameInput = document.getElementById('first-frame');
+    const subjectRefInput = document.getElementById('subject-ref');
+    const generateVideoBtn = document.getElementById('generate-video');
+    const videoStatus = document.querySelector('.video-status');
+    const statusText = document.getElementById('status-text');
+    const progressBar = document.querySelector('.progress');
+    const videoResult = document.querySelector('.video-result');
+    const resultVideo = document.getElementById('result-video');
+    const downloadVideoBtn = document.getElementById('download-video');
+
     if (cloneButton) cloneButton.addEventListener('click', cloneVoice);
     if (uploadMusicBtn) uploadMusicBtn.addEventListener('click', uploadMusic);
     if (generateMusicBtn) generateMusicBtn.addEventListener('click', generateMusic);
     if (downloadMusicBtn) downloadMusicBtn.addEventListener('click', downloadGeneratedMusic);
+    if (generateVideoBtn) generateVideoBtn.addEventListener('click', generateVideo);
+    if (downloadVideoBtn) downloadVideoBtn.addEventListener('click', downloadGeneratedVideo);
+    if (videoModel) videoModel.addEventListener('change', handleModelChange);
 
     if (sendButton) sendButton.addEventListener('click', sendMessage);
     if (speakButton) speakButton.addEventListener('click', () => synthesizeSpeech(lastAiMessage));
@@ -543,6 +563,169 @@ document.addEventListener('DOMContentLoaded', () => {
         input.addEventListener('input', updateTooltip);
         updateTooltip();
     });
+
+    function handleModelChange() {
+        const subjectUpload = document.querySelector('.subject-upload');
+        if (videoModel.value === 'S2V-01') {
+            subjectUpload.style.display = 'block';
+        } else {
+            subjectUpload.style.display = 'none';
+        }
+    }
+
+    async function generateVideo() {
+        if (!videoPrompt.value.trim()) {
+            displayMessage('ai', 'Please enter a prompt for the video');
+            return;
+        }
+
+        const formData = new FormData();
+        
+        // Add first frame image if provided
+        if (firstFrameInput.files.length > 0) {
+            const firstFrameResponse = await fetch(FILE_UPLOAD_URL, {
+                method: 'POST',
+                body: (() => {
+                    const fd = new FormData();
+                    fd.append('file', firstFrameInput.files[0]);
+                    fd.append('purpose', 'first_frame');
+                    return fd;
+                })()
+            });
+            
+            if (!firstFrameResponse.ok) {
+                throw new Error('Failed to upload first frame image');
+            }
+            
+            const firstFrameData = await firstFrameResponse.json();
+            formData.append('first_frame_image', firstFrameData.file_id);
+        }
+
+        // Add subject reference if using S2V-01 model
+        if (videoModel.value === 'S2V-01' && subjectRefInput.files.length > 0) {
+            const subjectResponse = await fetch(FILE_UPLOAD_URL, {
+                method: 'POST',
+                body: (() => {
+                    const fd = new FormData();
+                    fd.append('file', subjectRefInput.files[0]);
+                    fd.append('purpose', 'subject_reference');
+                    return fd;
+                })()
+            });
+            
+            if (!subjectResponse.ok) {
+                throw new Error('Failed to upload subject reference image');
+            }
+            
+            const subjectData = await subjectResponse.json();
+            formData.append('subject_reference', subjectData.file_id);
+        }
+
+        try {
+            generateVideoBtn.disabled = true;
+            videoStatus.style.display = 'block';
+            statusText.textContent = 'Generating video...';
+            progressBar.style.width = '0%';
+
+            const response = await fetch(VIDEO_GEN_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model: videoModel.value,
+                    prompt: videoPrompt.value.trim(),
+                    prompt_optimizer: promptOptimizer.checked,
+                    first_frame_image: formData.get('first_frame_image'),
+                    subject_reference: formData.get('subject_reference')
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Video generation failed');
+            }
+
+            const data = await response.json();
+            if (data.base_resp.status_code === 0 && data.task_id) {
+                await checkVideoStatus(data.task_id);
+            } else {
+                throw new Error(data.base_resp.status_msg || 'Video generation failed');
+            }
+        } catch (error) {
+            console.error('Video generation error:', error);
+            displayMessage('ai', `Error generating video: ${error.message}`);
+            videoStatus.style.display = 'none';
+        } finally {
+            generateVideoBtn.disabled = false;
+        }
+    }
+
+    async function checkVideoStatus(taskId) {
+        try {
+            while (true) {
+                const response = await fetch(`${VIDEO_STATUS_URL}?task_id=${taskId}`);
+                if (!response.ok) {
+                    throw new Error('Failed to check video status');
+                }
+
+                const data = await response.json();
+                if (data.base_resp.status_code !== 0) {
+                    throw new Error(data.base_resp.status_msg || 'Status check failed');
+                }
+
+                const progress = data.progress || 0;
+                progressBar.style.width = `${progress}%`;
+                statusText.textContent = `Generating video... ${progress}%`;
+
+                if (data.status === 'completed' && data.file_id) {
+                    await downloadVideo(data.file_id);
+                    break;
+                } else if (data.status === 'failed') {
+                    throw new Error('Video generation failed');
+                }
+
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    async function downloadVideo(fileId) {
+        try {
+            const response = await fetch(`${VIDEO_DOWNLOAD_URL}?file_id=${fileId}`);
+            if (!response.ok) {
+                throw new Error('Failed to download video');
+            }
+
+            const data = await response.json();
+            if (data.base_resp.status_code === 0 && data.url) {
+                resultVideo.src = data.url;
+                videoResult.style.display = 'block';
+                videoStatus.style.display = 'none';
+                displayMessage('ai', 'Video generated successfully!');
+            } else {
+                throw new Error(data.base_resp.status_msg || 'Download failed');
+            }
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    async function downloadGeneratedVideo() {
+        if (resultVideo.src) {
+            const response = await fetch(resultVideo.src);
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'generated_video.mp4';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
+    }
 
     // Auto-resize textarea
     if (userInput) {

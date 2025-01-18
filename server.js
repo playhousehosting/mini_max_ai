@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
 const https = require('https');
+const FormData = require('form-data');
 require('dotenv').config();
 
 const app = express();
@@ -11,6 +12,7 @@ const T2A_API_URL = 'https://api.minimaxi.chat/v1/t2a_v2';
 const VIDEO_GEN_API_URL = 'https://api.minimaxi.chat/v1/video_generation';
 const VIDEO_QUERY_API_URL = 'https://api.minimaxi.chat/v1/query/video_generation';
 const FILE_RETRIEVE_API_URL = 'https://api.minimaxi.chat/v1/files/retrieve';
+const FILE_UPLOAD_API_URL = 'https://api.minimaxi.chat/v1/files/upload';
 
 const MAX_AUDIO_SIZE = process.env.MAX_AUDIO_SIZE || 20971520; // 20MB
 const MIN_AUDIO_DURATION = process.env.MIN_AUDIO_DURATION || 10;
@@ -33,8 +35,7 @@ async function makeRequest(url, options, data) {
                             if (parsedData.choices && parsedData.choices.length > 0) {
                                 resolve(parsedData.choices[0].message.content);
                             } else {
-                                console.error('No choices found in response:', parsedData);
-                                reject(new Error('No choices found in API response'));
+                                resolve(parsedData); // Return full response for non-chat endpoints
                             }
                         } else if (parsedData.base_resp) {
                             reject(new Error(parsedData.base_resp.status_msg || 'API request failed'));
@@ -57,9 +58,17 @@ async function makeRequest(url, options, data) {
         });
 
         if (data) {
-            req.write(JSON.stringify(data));
+            if (data instanceof FormData) {
+                // For FormData, pipe the form data to the request
+                data.pipe(req);
+            } else {
+                // For JSON data, stringify and write
+                req.write(JSON.stringify(data));
+                req.end();
+            }
+        } else {
+            req.end();
         }
-        req.end();
     });
 }
 
@@ -105,8 +114,14 @@ async function parseBody(req) {
 }
 
 // Middleware
+const fileUpload = require('express-fileupload');
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
+app.use(fileUpload({
+    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max file size
+    useTempFiles: true,
+    tempFileDir: '/tmp/'
+}));
 
 // Add CORS headers
 app.use((req, res, next) => {
@@ -198,11 +213,47 @@ app.post('/api/t2a', async (req, res) => {
     }
 });
 
+// File upload endpoint
+app.post('/api/files/upload', async (req, res) => {
+    try {
+        if (!req.files || !req.files.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+
+        const file = req.files.file;
+        const form = new FormData();
+        form.append('file', file.data, {
+            filename: file.name,
+            contentType: file.mimetype,
+            knownLength: file.data.length
+        });
+        form.append('purpose', req.body.purpose || 'general');
+
+        const response = await makeRequest(
+            `${FILE_UPLOAD_API_URL}?GroupId=${process.env.MINIMAX_GROUP_ID}`,
+            {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${process.env.MINIMAX_API_KEY}`,
+                    ...form.getHeaders()
+                }
+            },
+            form
+        );
+
+        console.log('File upload response:', response);
+        res.json(response);
+    } catch (error) {
+        console.error('File upload error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Video generation endpoint
 app.post('/api/video/generate', async (req, res) => {
     try {
         const response = await makeRequest(
-            VIDEO_GEN_API_URL,
+            `${VIDEO_GEN_API_URL}?GroupId=${process.env.MINIMAX_GROUP_ID}`,
             {
                 method: 'POST',
                 headers: {
@@ -220,6 +271,7 @@ app.post('/api/video/generate', async (req, res) => {
         );
         res.json(response);
     } catch (error) {
+        console.error('Video generation error:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -233,7 +285,7 @@ app.get('/api/video/status', async (req, res) => {
         }
 
         const response = await makeRequest(
-            `${VIDEO_QUERY_API_URL}?task_id=${task_id}`,
+            `${VIDEO_QUERY_API_URL}?GroupId=${process.env.MINIMAX_GROUP_ID}&task_id=${task_id}`,
             {
                 method: 'GET',
                 headers: {
@@ -244,6 +296,7 @@ app.get('/api/video/status', async (req, res) => {
         );
         res.json(response);
     } catch (error) {
+        console.error('Video status error:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -268,6 +321,7 @@ app.get('/api/video/download', async (req, res) => {
         );
         res.json(response);
     } catch (error) {
+        console.error('Video download error:', error);
         res.status(500).json({ error: error.message });
     }
 });
