@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MiniMax AI Chat</title>
     <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="app-container">
@@ -35,12 +36,14 @@
 
         <main>
             <div class="chat-container">
-                <div id="chat-messages" class="messages"></div>
+                <div id="chat-messages" class="messages">
+                    <!-- Messages will be dynamically added here -->
+                </div>
                 <div class="input-area">
                     <textarea 
                         id="message-input" 
-                        placeholder="Type your message here..."
-                        rows="3"
+                        placeholder="Message MiniMax AI..."
+                        rows="1"
                     ></textarea>
                     <div class="button-group">
                         <button id="voice-record" class="icon-button">🎤</button>
@@ -181,83 +184,5 @@
     </div>
 
     <script src="script.js"></script>
-
-    <section class="api-docs">
-        <h2>Music Generation API</h2>
-        <h3>Introduction</h3>
-        <p>The function of this API: it supports users to upload custom reference music and lyrics, and then generate AI music with the reference music (acapella + accompaniment) and lyrics.</p>
-        
-        <p>The specific operation process is as follows:</p>
-        <ol>
-            <li>Upload the music file or acapella + accompaniment file through the Upload API to obtain the voice_id (acapella) and instrumental_id (accompaniment) that will be used as references for generating the music;</li>
-            <li>Generate the corresponding AI music with the voice_id, instrumental_id, and lyrics.</li>
-        </ol>
-
-        <h3>Upload API</h3>
-        <p><strong>API:</strong> https://api.minimaxi.chat/v1/music_upload</p>
-        <p>Upload the audio file, split it into acapella and accompaniment, and generate corresponding voice_id and instrumental_id. They can be used as the reference acapella and accompaniment for the music generation API.</p>
-
-        <h4>Request Parameters</h4>
-        <ul>
-            <li><strong>Authorization</strong> (string, Required): API key</li>
-            <li><strong>file</strong> (Required): Audio file path, supports WAV and MP3 formats. The audio duration must be longer than 10s and no more than 10 minutes.</li>
-            <li><strong>purpose</strong> (string, Required): song/voice/instrumental
-                <ul>
-                    <li>If purpose is song:
-                        <ul>
-                            <li>You need to upload a music file containing both acapella (vocals) and accompaniment.</li>
-                            <li>The acapella must be in singing form; normal speech is not supported.</li>
-                            <li>Outputs: voice_id and instrumental_id.</li>
-                        </ul>
-                    </li>
-                    <li>If purpose is voice:
-                        <ul>
-                            <li>You need to upload a file containing only acapella in singing form (normal speech audio is not supported).</li>
-                            <li>Output: voice_id.</li>
-                        </ul>
-                    </li>
-                    <li>If purpose is instrumental:
-                        <ul>
-                            <li>You need to upload a file containing only accompaniment.</li>
-                            <li>Output: instrumental_id.</li>
-                        </ul>
-                    </li>
-                </ul>
-            </li>
-        </ul>
-
-        <h4>Response</h4>
-        <ul>
-            <li><strong>voice_id</strong>: The voice_id will only be returned when the purpose is song or voice.</li>
-            <li><strong>instrumental_id</strong>: The instrumental_id will only be returned when the purpose is song or instrumental.</li>
-            <li><strong>base_resp</strong>: Error codes, status messages, and corresponding details.</li>
-        </ul>
-
-        <h3>Music Generation API</h3>
-        <p><strong>API:</strong> https://api.minimaxi.chat/v1/music_generation</p>
-        <p>This API will use the voice_id and instrumental_id from the Upload API to generate AI music.</p>
-
-        <h4>Request Parameters</h4>
-        <ul>
-            <li><strong>Authorization</strong> (string, Required): API key.</li>
-            <li><strong>refer_voice</strong> (string): voice_id. At least one of refer_voice or refer_instrumental is required.</li>
-            <li><strong>refer_instrumental</strong> (string): instrumental_id. At least one of refer_voice or refer_instrumental is required.</li>
-            <li><strong>lyrics</strong> (string, Required): 
-                <ul>
-                    <li>Use a newline character (\n) to separate each line of lyrics.</li>
-                    <li>Use two consecutive newline characters (\n\n) to add a pause between lines.</li>
-                    <li>Use double hash marks (##) at the beginning and end of the lyrics to add accompaniment.</li>
-                </ul>
-            </li>
-            <li><strong>model</strong> (string, Required): music-01</li>
-            <li><strong>audio_setting</strong>: Optional settings for the output audio format.</li>
-        </ul>
-
-        <h4>Response</h4>
-        <ul>
-            <li><strong>data</strong>: Contains the generated audio data and status.</li>
-            <li><strong>base_resp</strong>: Error codes, status messages, and corresponding details.</li>
-        </ul>
-    </section>
 </body>
 </html>
