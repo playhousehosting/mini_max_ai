@@ -637,9 +637,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             generateVideoBtn.disabled = true;
-            videoStatus.style.display = 'block';
-            statusText.textContent = 'Generating video...';
-            progressBar.style.width = '0%';
+            if(videoStatus) {
+                videoStatus.style.display = 'block';
+            }
+            if(statusText) {
+                statusText.textContent = 'Generating video...';
+            }
+            if(progressBar) {
+                progressBar.style.width = '0%';
+            }
 
             const response = await fetch(VIDEO_GEN_URL, {
                 method: 'POST',
@@ -688,8 +694,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 const progress = data.progress || 0;
-                progressBar.style.width = `${progress}%`;
-                statusText.textContent = `Generating video... ${progress}%`;
+                if (progressBar) {
+                    progressBar.style.width = `${progress}%`;
+                }
+                if (statusText) {
+                    statusText.textContent = `Generating video... ${progress}%`;
+                }
 
                 if (data.status === 'completed' && data.file_id) {
                     await downloadVideo(data.file_id);
