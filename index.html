@@ -59,7 +59,7 @@
                 </div>
             </div>
         </aside>
-
+ 
         <main class="chat-main">
             <div class="chat-container">
                 <div id="chat-messages" class="messages">
@@ -87,7 +87,7 @@
                 </div>
             </div>
         </main>
-
+ 
         <aside class="features-panel">
             <div class="panel voice-clone-panel">
                 <h2>Voice Clone</h2>
@@ -116,6 +116,50 @@
                         rows="2"
                     ></textarea>
                     <button id="preview-voice">Preview</button>
+                </div>
+            </div>
+
+            <div class="panel music-gen-panel">
+                <h2>Music Generation</h2>
+                <div class="upload-section">
+                    <label class="file-upload">
+                        <input type="file" id="music-file" accept="audio/*" />
+                        <span>Choose Music File</span>
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>Purpose</label>
+                    <input type="text" id="upload-purpose" placeholder="e.g., background track" />
+                </div>
+                <button id="upload-music">Upload Music</button>
+                <div class="reference-section">
+                    <div class="form-group">
+                        <label>Voice Reference ID</label>
+                        <input type="text" id="voice-id-ref" placeholder="Voice ID Reference" />
+                    </div>
+                    <div class="form-group">
+                        <label>Instrumental Reference ID</label>
+                        <input type="text" id="instrumental-id-ref" placeholder="Instrumental ID Reference" />
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Lyrics</label>
+                    <textarea id="lyrics-input" rows="3" placeholder="Enter lyrics for the music"></textarea>
+                </div>
+                <div class="checkbox-group">
+                    <label>
+                        <input type="checkbox" id="use-voice" />
+                        Use Voice Reference
+                    </label>
+                    <label>
+                        <input type="checkbox" id="use-instrumental" />
+                        Use Instrumental Reference
+                    </label>
+                </div>
+                <button id="generate-music">Generate Music</button>
+                <div class="music-result" style="display:none;">
+                    <audio id="result-audio" controls></audio>
+                    <button id="download-music">Download Music</button>
                 </div>
             </div>
 
@@ -149,7 +193,7 @@
             </div>
         </aside>
     </div>
-
+ 
     <div id="status-message" class="status-message"></div>
     <script src="script.js"></script>
 </body>

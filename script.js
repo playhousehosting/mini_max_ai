@@ -1,4 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
+    const API_KEY = "66701c8e1d57f38758d58198";
     const chatLog = document.getElementById('chat-messages');
     const userInput = document.getElementById('message-input');
     const sendButton = document.getElementById('send-message');
@@ -62,6 +63,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const downloadVideoBtn = document.getElementById('download-video');
 
     if (cloneButton) cloneButton.addEventListener('click', cloneVoice);
+    if(document.getElementById('preview-voice')) {
+        document.getElementById('preview-voice').addEventListener('click', () => {
+            const previewTextValue = document.getElementById('preview-text').value;
+            if(previewTextValue) {
+                synthesizeSpeech(previewTextValue);
+            }
+        });
+    }
     if (uploadMusicBtn) uploadMusicBtn.addEventListener('click', uploadMusic);
     if (generateMusicBtn) generateMusicBtn.addEventListener('click', generateMusic);
     if (downloadMusicBtn) downloadMusicBtn.addEventListener('click', downloadGeneratedMusic);
@@ -128,7 +137,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(CHAT_API_URL, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'X-API-Key': API_KEY
                 },
                 body: JSON.stringify({
                     messages: conversationHistory
@@ -188,7 +198,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(T2A_API_URL, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'X-API-Key': API_KEY
                 },
                 body: JSON.stringify({
                     text: text,
@@ -291,6 +302,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const uploadResponse = await fetch(FILE_UPLOAD_URL, {
                 method: 'POST',
+                headers: {
+                    'X-API-Key': API_KEY
+                },
                 body: formData
             });
 
